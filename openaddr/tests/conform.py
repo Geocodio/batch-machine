@@ -2295,7 +2295,7 @@ class TestConformCsv(unittest.TestCase):
         conform = SourceConfig(conform, "addresses", "default")
 
         dest_path = os.path.join(self.testdir, "output.csv")
-        csv_source_to_csv(conform, src_path, dest_path)
+        csv_source_to_csv(conform, src_path, dest_path, False)
 
         with open(dest_path, 'rb') as file:
             return [s.decode('utf-8').strip() for s in file]

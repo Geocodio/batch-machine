@@ -706,7 +706,7 @@ def csv_source_to_csv(source_config, source_path, dest_path, disable_centroids):
                     _L.debug("Skipping row. Got %d columns, expected %d", len(source_row), num_fields)
                     continue
                 try:
-                    out_row = row_extract_and_reproject(source_config, source_row, disable_centroids, disable_centroids)
+                    out_row = row_extract_and_reproject(source_config, source_row, disable_centroids)
                 except Exception as e:
                     _L.error('Error in row {}: {}'.format(row_number, e))
                     raise
@@ -1194,12 +1194,12 @@ def extract_to_source_csv(source_config, source_path, extract_path, disable_cent
         ogr_source_path = normalize_ogr_filename_case(source_path)
         ogr_source_to_csv(source_config, ogr_source_path, extract_path, disable_centroids)
     elif format_string == "csv":
-        csv_source_to_csv(source_config, source_path, extract_path)
+        csv_source_to_csv(source_config, source_path, extract_path, disable_centroids)
     elif format_string == "geojson":
         # GeoJSON sources have some awkward legacy with ESRI, see issue #34
         if protocol_string == "ESRI":
             _L.info("ESRI GeoJSON source found; treating it as CSV")
-            csv_source_to_csv(source_config, source_path, extract_path)
+            csv_source_to_csv(source_config, source_path, extract_path, disable_centroids)
         else:
             _L.info("Non-ESRI GeoJSON source found; converting as a stream.")
             geojson_source_path = normalize_ogr_filename_case(source_path)
