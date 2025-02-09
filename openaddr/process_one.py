@@ -57,7 +57,7 @@ def boolstr(value):
 
 def process(source, destination, layer, layersource,
             do_preview, do_pmtiles,
-            protomaps_key=None, extras=dict()):
+            protomaps_key=None, disable_centroids=False, extras=dict()):
     ''' Process a single source and destination, return path to JSON state file.
 
         Creates a new directory and files under destination.
@@ -148,7 +148,7 @@ def process(source, destination, layer, layersource,
                     _L.info(u'Cached data in {}'.format(cache_result.cache))
 
                     # Conform cached source data.
-                    conform_result = conform(source_config, temp_dir, cache_result.todict())
+                    conform_result = conform(source_config, temp_dir, cache_result.todict(), disable_centroids)
 
                     if not conform_result.path:
                         _L.warning('Nothing processed')
@@ -407,6 +407,10 @@ parser.add_argument('-ln', '--layer', help='Layer name to process in V2 sources'
 parser.add_argument('-ls', '--layersource', help='Source within a given layer to pull from',
                     dest='layersource', default='')
 
+parser.add_argument('--disable-centroids', help="Don't calculate and return centroids, return raw polygons instead when available",
+                    action='store_const', dest='disable_centroids',
+                    const=True, default=False)
+
 parser.add_argument('--skip-preview', help="Don't render a map preview",
                     action='store_const', dest='render_preview',
                     const=False, default=True)
@@ -464,7 +468,8 @@ def main():
                                  args.layer, args.layersource,
                                  args.render_preview,
                                  args.render_preview,
-                                 protomaps_key=args.protomaps_key)
+                                 protomaps_key=args.protomaps_key,
+                                 disable_centroids=args.disable_centroids)
     except Exception as e:
         _L.error(e, exc_info=True)
         return 1

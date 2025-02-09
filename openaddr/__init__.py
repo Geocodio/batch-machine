@@ -100,7 +100,7 @@ def cache(source_config, destdir, extras):
                        source_config.data_source.get('version', None),
                        datetime.now() - start)
 
-def conform(source_config, destdir, extras):
+def conform(source_config, destdir, extras, disable_centroids):
     ''' Python wrapper for openaddresses-conform.
 
         Return a ConformResult object:
@@ -144,7 +144,7 @@ def conform(source_config, destdir, extras):
 
     task4 = ConvertToGeojsonTask()
     try:
-        out_path, feat_count = task4.convert(source_config, decompressed_paths, workdir)
+        out_path, feat_count = task4.convert(source_config, decompressed_paths, workdir, disable_centroids)
         if feat_count > 0:
             _L.info("Converted to %s with %d features", out_path, feat_count)
         else:

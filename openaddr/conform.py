@@ -450,7 +450,7 @@ def find_source_path(data_source, source_paths):
 class ConvertToGeojsonTask(object):
     known_types = ('.shp', '.json', '.csv', '.kml', '.gdb', '.gpkg')
 
-    def convert(self, source_config, source_paths, workdir):
+    def convert(self, source_config, source_paths, workdir, disable_centroids):
         "Convert a list of source_paths and write results in workdir"
         _L.debug("Converting to %s", workdir)
 
@@ -464,7 +464,7 @@ class ConvertToGeojsonTask(object):
         if source_path is not None:
             basename, ext = os.path.splitext(os.path.basename(source_path))
             dest_path = os.path.join(convert_path, basename + ".geojson")
-            rc = conform_cli(source_config, source_path, dest_path)
+            rc = conform_cli(source_config, source_path, dest_path, disable_centroids)
             if rc == 0:
                 with open(dest_path) as file:
                     addr_count = sum(1 for line in file)
@@ -522,7 +522,7 @@ def normalize_ogr_filename_case(source_path):
     return normal_path
 
 # TODO rip out a bunch of this and replace with call to row_extract_and_reproject
-def ogr_source_to_csv(source_config, source_path, dest_path):
+def ogr_source_to_csv(source_config, source_path, dest_path, disable_centroids):
     ''' Convert a single shapefile or GeoJSON in source_path and put it in dest_path
     '''
     in_datasource = ogr.Open(source_path, 0)
@@ -606,7 +606,7 @@ def ogr_source_to_csv(source_config, source_path, dest_path):
             if geom is not None:
                 geom.Transform(coordTransform)
 
-                if source_config.layer == "addresses":
+                if source_config.layer == "addresses" and !disable_centroids:
                     # For Addresses - Calculate the centroid on surface of the geometry and write it as X and Y columns
                     try:
                         centroid = geom.PointOnSurface()
@@ -630,7 +630,7 @@ def ogr_source_to_csv(source_config, source_path, dest_path):
 
     in_datasource.Destroy()
 
-def csv_source_to_csv(source_config, source_path, dest_path):
+def csv_source_to_csv(source_config, source_path, dest_path, disable_centroids):
     "Convert a source CSV file to an intermediate form, coerced to UTF-8 and EPSG:4326"
     _L.info("Converting source CSV %s", source_path)
 
@@ -706,14 +706,14 @@ def csv_source_to_csv(source_config, source_path, dest_path):
                     _L.debug("Skipping row. Got %d columns, expected %d", len(source_row), num_fields)
                     continue
                 try:
-                    out_row = row_extract_and_reproject(source_config, source_row)
+                    out_row = row_extract_and_reproject(source_config, source_row, disable_centroids, disable_centroids)
                 except Exception as e:
                     _L.error('Error in row {}: {}'.format(row_number, e))
                     raise
                 else:
                     writer.writerow(out_row)
 
-def geojson_source_to_csv(source_config, source_path, dest_path):
+def geojson_source_to_csv(source_config, source_path, dest_path, disable_centroids):
     '''
     '''
     # For every row in the source GeoJSON
@@ -736,7 +736,7 @@ def geojson_source_to_csv(source_config, source_path, dest_path):
                     if not geom:
                         continue
 
-                    if source_config.layer == "addresses":
+                    if source_config.layer == "addresses" and !disable_centroids:
                         # For Addresses - Calculate the centroid on surface of the geometry and write it as X and Y columns
                         geom = geom.PointOnSurface()
 
@@ -768,7 +768,7 @@ def _transform_to_4326(srs):
         _transform_cache[srs] = osr.CoordinateTransformation(in_spatial_ref, out_spatial_ref)
     return _transform_cache[srs]
 
-def row_extract_and_reproject(source_config, source_row):
+def row_extract_and_reproject(source_config, source_row, disable_centroids):
     ''' Find geometries in source CSV data and store it in ESPG:4326
     '''
     data_source = source_config.data_source
@@ -834,7 +834,7 @@ def row_extract_and_reproject(source_config, source_row):
                 _L.debug("Could not reproject %s %s in SRS %s", source_x, source_y, srs)
 
     # For Addresses - Calculate the centroid on surface of the geometry and write it as X and Y columns
-    if source_config.layer == "addresses":
+    if source_config.layer == "addresses" and !disable_centroids:
         geom = ogr.CreateGeometryFromWkt(source_geom)
 
         try:
@@ -1179,7 +1179,7 @@ def row_convert_to_out(source_config, row):
 
 ### File-level conform code. Inputs and outputs are filenames.
 
-def extract_to_source_csv(source_config, source_path, extract_path):
+def extract_to_source_csv(source_config, source_path, extract_path, disable_centroids):
     """Extract arbitrary downloaded sources to an extracted CSV in the source schema.
     source_config: description of the source, containing the conform object
     extract_path: file to write the extracted CSV file
@@ -1192,7 +1192,7 @@ def extract_to_source_csv(source_config, source_path, extract_path):
 
     if format_string in ("shapefile", "xml", "gdb", "gpkg"):
         ogr_source_path = normalize_ogr_filename_case(source_path)
-        ogr_source_to_csv(source_config, ogr_source_path, extract_path)
+        ogr_source_to_csv(source_config, ogr_source_path, extract_path, disable_centroids)
     elif format_string == "csv":
         csv_source_to_csv(source_config, source_path, extract_path)
     elif format_string == "geojson":
@@ -1203,7 +1203,7 @@ def extract_to_source_csv(source_config, source_path, extract_path):
         else:
             _L.info("Non-ESRI GeoJSON source found; converting as a stream.")
             geojson_source_path = normalize_ogr_filename_case(source_path)
-            geojson_source_to_csv(source_config, geojson_source_path, extract_path)
+            geojson_source_to_csv(source_config, geojson_source_path, extract_path, disable_centroids)
     else:
         raise Exception("Unsupported source format %s" % format_string)
 
@@ -1224,7 +1224,7 @@ def transform_to_out_geojson(source_config, extract_path, dest_path):
                 out_row = row_transform_and_convert(source_config, extract_row)
                 dest_fp.write(json.dumps(out_row) + '\n')
 
-def conform_cli(source_config, source_path, dest_path):
+def conform_cli(source_config, source_path, dest_path, disable_centroids):
     "Command line entry point for conforming a downloaded source to an output CSV."
     # TODO: this tool only works if the source creates a single output
 
@@ -1243,7 +1243,7 @@ def conform_cli(source_config, source_path, dest_path):
     _L.debug('extract temp file %s', extract_path)
 
     try:
-        extract_to_source_csv(source_config, source_path, extract_path)
+        extract_to_source_csv(source_config, source_path, extract_path, disable_centroids)
         transform_to_out_geojson(source_config, extract_path, dest_path)
     finally:
         os.remove(extract_path)
