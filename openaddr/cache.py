@@ -24,7 +24,7 @@ from esridump.errors import EsriDownloadError
 import requests
 
 # HTTP timeout in seconds, used in various calls to requests.get() and requests.post()
-_http_timeout = 180
+_http_timeout = 1800
 
 from .conform import GEOM_FIELDNAME
 from . import util
