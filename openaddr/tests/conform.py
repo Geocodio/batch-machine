@@ -57,6 +57,7 @@ class TestConformTransforms (unittest.TestCase):
             "type": "Feature",
             "properties": {
                 "unit": "",
+                "building_name": "",
                 "number": "123",
                 "street": "MAPLE LN",
                 "city": "",
@@ -375,6 +376,7 @@ class TestConformTransforms (unittest.TestCase):
                 "region": "",
                 "district": "",
                 "postcode": "",
+                "building_name": "",
                 'hash': 'b3af08e447c7ed16',
                 "id": ""
             },
@@ -405,6 +407,7 @@ class TestConformTransforms (unittest.TestCase):
                 "region": "",
                 "district": "",
                 "postcode": "",
+                "building_name": "",
                 "id": "",
                 'hash': 'd4681f7e1d34e6ed'
             },
@@ -453,6 +456,7 @@ class TestConformTransforms (unittest.TestCase):
                 "district": "",
                 "postcode": "",
                 "id": "",
+                "building_name": "",
                 'hash': '591d7970b5753b0d'
             }
         }, r)
@@ -491,6 +495,7 @@ class TestConformTransforms (unittest.TestCase):
                 "district": "",
                 "postcode": "",
                 "id": "",
+                "building_name": "",
                 'hash': '7b1dc0b74cbc0162'
             }
         }, r)
@@ -509,6 +514,44 @@ class TestConformTransforms (unittest.TestCase):
                      ("324.5", "324.5")):
             r = row_canonicalize_unit_and_number({}, {"number": a, "street": "", "unit": ""})
             self.assertEqual(e, r["number"])
+
+    def test_row_canonicalize_building_name(self):
+        r = row_canonicalize_unit_and_number({}, {"number": "", "street": " OAK DR.", "unit": "", "building_name": " Rose Cottage "})
+        self.assertEqual("Rose Cottage", r["building_name"])
+
+        # Missing building_name canonicalizes to empty string
+        r = row_canonicalize_unit_and_number({}, {"number": "", "street": "OAK DR.", "unit": ""})
+        self.assertEqual("", r["building_name"])
+
+    def test_row_transform_and_convert_building_name(self):
+        "A BUILDING_NAME source column flows through to the output building_name attribute"
+        d = SourceConfig(dict({
+            "schema": 2,
+            "layers": {
+                "addresses": [{
+                    "name": "default",
+                    "conform": {
+                        "street": "STREET",
+                        "number": "NUMBER",
+                        "building_name": "BUILDING_NAME",
+                        "lon": "LON",
+                        "lat": "LAT"
+                    }
+                }]
+            }
+        }), "addresses", "default")
+
+        feat = row_transform_and_convert(d, {
+            "STREET": "HIGH STREET",
+            "NUMBER": "",
+            "BUILDING_NAME": "Rose Cottage",
+            "LON": "-1.25",
+            "LAT": "51.75"
+        })
+
+        self.assertEqual("Rose Cottage", feat["properties"]["building_name"])
+        self.assertEqual("", feat["properties"]["number"])
+        self.assertEqual("HIGH STREET", feat["properties"]["street"])
 
     def test_row_canonicalize_street_and_no_number(self):
         r = row_canonicalize_unit_and_number({}, {"number": None, "street": " OAK DR.", "unit": None})

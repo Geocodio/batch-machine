@@ -46,7 +46,7 @@ gdal.PushErrorHandler(gdal_error_handler)
 # We add columns to the extracted CSV with our own data with these names.
 GEOM_FIELDNAME = 'oa:geom'
 
-ADDRESSES_SCHEMA = [ 'hash', 'number', 'street', 'unit', 'city', 'district', 'region', 'postcode', 'id' ]
+ADDRESSES_SCHEMA = [ 'hash', 'number', 'street', 'unit', 'building_name', 'city', 'district', 'region', 'postcode', 'id' ]
 BUILDINGS_SCHEMA = [ 'hash']
 PARCELS_SCHEMA = [ 'hash', 'pid' ]
 RESERVED_SCHEMA = ADDRESSES_SCHEMA + BUILDINGS_SCHEMA + PARCELS_SCHEMA + [
@@ -1025,6 +1025,7 @@ def row_canonicalize_unit_and_number(sc, row):
     row["unit"] = (row.get("unit", '') or '').strip()
     row["number"] = (row.get("number", '') or '').strip()
     row["street"] = (row.get("street", '') or '').strip()
+    row["building_name"] = (row.get("building_name", '') or '').strip()
 
     if row.get("number", '').endswith('.0'):
         row["number"] = row["number"][:-2]
