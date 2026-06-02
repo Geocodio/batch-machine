@@ -100,7 +100,7 @@ def cache(source_config, destdir, extras):
                        source_config.data_source.get('version', None),
                        datetime.now() - start)
 
-def conform(source_config, destdir, extras, disable_centroids):
+def conform(source_config, destdir, extras, disable_centroids=False):
     ''' Python wrapper for openaddresses-conform.
 
         Return a ConformResult object:

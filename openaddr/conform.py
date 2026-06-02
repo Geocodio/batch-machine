@@ -450,7 +450,7 @@ def find_source_path(data_source, source_paths):
 class ConvertToGeojsonTask(object):
     known_types = ('.shp', '.json', '.csv', '.kml', '.gdb', '.gpkg')
 
-    def convert(self, source_config, source_paths, workdir, disable_centroids):
+    def convert(self, source_config, source_paths, workdir, disable_centroids=False):
         "Convert a list of source_paths and write results in workdir"
         _L.debug("Converting to %s", workdir)
 
@@ -522,7 +522,7 @@ def normalize_ogr_filename_case(source_path):
     return normal_path
 
 # TODO rip out a bunch of this and replace with call to row_extract_and_reproject
-def ogr_source_to_csv(source_config, source_path, dest_path, disable_centroids):
+def ogr_source_to_csv(source_config, source_path, dest_path, disable_centroids=False):
     ''' Convert a single shapefile or GeoJSON in source_path and put it in dest_path
     '''
     in_datasource = ogr.Open(source_path, 0)
@@ -630,7 +630,7 @@ def ogr_source_to_csv(source_config, source_path, dest_path, disable_centroids):
 
     in_datasource.Destroy()
 
-def csv_source_to_csv(source_config, source_path, dest_path, disable_centroids):
+def csv_source_to_csv(source_config, source_path, dest_path, disable_centroids=False):
     "Convert a source CSV file to an intermediate form, coerced to UTF-8 and EPSG:4326"
     _L.info("Converting source CSV %s", source_path)
 
@@ -713,7 +713,7 @@ def csv_source_to_csv(source_config, source_path, dest_path, disable_centroids):
                 else:
                     writer.writerow(out_row)
 
-def geojson_source_to_csv(source_config, source_path, dest_path, disable_centroids):
+def geojson_source_to_csv(source_config, source_path, dest_path, disable_centroids=False):
     '''
     '''
     # For every row in the source GeoJSON
@@ -768,7 +768,7 @@ def _transform_to_4326(srs):
         _transform_cache[srs] = osr.CoordinateTransformation(in_spatial_ref, out_spatial_ref)
     return _transform_cache[srs]
 
-def row_extract_and_reproject(source_config, source_row, disable_centroids):
+def row_extract_and_reproject(source_config, source_row, disable_centroids=False):
     ''' Find geometries in source CSV data and store it in ESPG:4326
     '''
     data_source = source_config.data_source
@@ -1179,7 +1179,7 @@ def row_convert_to_out(source_config, row):
 
 ### File-level conform code. Inputs and outputs are filenames.
 
-def extract_to_source_csv(source_config, source_path, extract_path, disable_centroids):
+def extract_to_source_csv(source_config, source_path, extract_path, disable_centroids=False):
     """Extract arbitrary downloaded sources to an extracted CSV in the source schema.
     source_config: description of the source, containing the conform object
     extract_path: file to write the extracted CSV file
@@ -1224,7 +1224,7 @@ def transform_to_out_geojson(source_config, extract_path, dest_path):
                 out_row = row_transform_and_convert(source_config, extract_row)
                 dest_fp.write(json.dumps(out_row) + '\n')
 
-def conform_cli(source_config, source_path, dest_path, disable_centroids):
+def conform_cli(source_config, source_path, dest_path, disable_centroids=False):
     "Command line entry point for conforming a downloaded source to an output CSV."
     # TODO: this tool only works if the source creates a single output
 
