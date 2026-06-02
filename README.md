@@ -60,3 +60,16 @@ openaddr-process-one --skip-preview --layer addresses --layersource state exampl
 ```
 
 Review https://github.com/openaddresses/openaddresses/blob/master/CONTRIBUTING.md for input json syntax.
+
+## Geocodio fork notes
+
+This is Geocodio's fork of `openaddresses/batch-machine`. The following changes
+diverge from upstream and must be preserved across upstream merges:
+
+- **`building_name` addresses attribute** — `building_name` is added to
+  `ADDRESSES_SCHEMA` (`openaddr/conform.py`) and canonicalized (stripped) in
+  `row_canonicalize_unit_and_number`. This lets a source's `building_name`
+  conform tag (e.g. GB AddressBase `BUILDING_NAME`) flow through to the
+  conformed output row, so named-but-unnumbered properties stay individually
+  addressable. It is a geocodio-specific addition and is not part of the
+  upstream OpenAddresses schema.
