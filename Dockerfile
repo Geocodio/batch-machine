@@ -3,7 +3,8 @@ FROM ghcr.io/osgeo/gdal:alpine-normal-3.11.0
 RUN apk add --no-cache nodejs yarn git python3-dev py3-pip \
     make sqlite-dev zlib-dev geos-dev \
     gcc g++ musl-dev postgresql-dev cairo \
-    py3-cairo file
+    py3-cairo file && \
+    apk add --no-cache --upgrade expat
 
 # Download and install Tippecanoe
 RUN git clone -b 2.31.0 https://github.com/felt/tippecanoe.git /tmp/tippecanoe && \
