@@ -1,5 +1,45 @@
+2026-03-27 v10.0.0
+- Upgrade base Docker image from GDAL 3.7.1 to 3.11.0 https://github.com/openaddresses/batch-machine/pull/99
+- Update SSL CA certificates to fix download failures https://github.com/openaddresses/batch-machine/pull/98
+- Bump requests from 2.32.4 to 2.33.0 https://github.com/openaddresses/batch-machine/pull/97
+
+2026-03-15 v9.18.0
+- Add centerline fields and mph_to_kph function https://github.com/openaddresses/batch-machine/pull/96
+
+2026-03-15 v9.17.0
+- Add centerlines layer support https://github.com/openaddresses/batch-machine/pull/95
+- Fix Docker build and update test hash for Shapely compatibility https://github.com/openaddresses/batch-machine/pull/94
+- Bump protobuf from 4.25.8 to 5.29.6 https://github.com/openaddresses/batch-machine/pull/89
+
+2026-01-31 v9.16.0
+- Add support for geopackage https://github.com/openaddresses/batch-machine/pull/88
+
+2026-01-07 v9.15.0
+- Recursively expand ZIP files https://github.com/openaddresses/batch-machine/pull/87
+
+2025-12-14 v9.14.0
+- Include building height and levels as part of schema https://github.com/openaddresses/batch-machine/pull/85
+
+2025-12-14 v9.13.0
+- Handle accuracy as an integer when building fields to download in Esri https://github.com/openaddresses/batch-machine/pull/84
+- Prevent extra spaces in join function https://github.com/openaddresses/batch-machine/pull/83
+
+2025-11-24 v9.12.0
+- Support for accuracy column in row https://github.com/openaddresses/batch-machine/pull/82
+- Keep filename extension if present in case of .gz files https://github.com/openaddresses/batch-machine/pull/81
+- Upgrade protobuf and requests https://github.com/openaddresses/batch-machine/pull/79 and https://github.com/openaddresses/batch-machine/pull/80
+
+2025-04-13 v9.11.0
+- Make regexp function slightly more resilient in https://github.com/openaddresses/batch-machine/pull/78
+- Remove semicolons at the end of lines in https://github.com/openaddresses/batch-machine/pull/77
+- Only perform decompress step if requested in conform in https://github.com/openaddresses/batch-machine/pull/76
+- Move filter to the right spot when calculating field names to request in https://github.com/openaddresses/batch-machine/pull/75
+
+2025-04-08 v9.10.0
+- Handle field names for constant function in https://github.com/openaddresses/batch-machine/pull/74
+
 2025-02-07 v9.9.0
-- Fix bug leading to excessive memory consumotion when gunziping streams
+- Fix bug leading to excessive memory consumotion when gunziping streams in https://github.com/openaddresses/batch-machine/pull/70
 
 2024-11-23 v9.8.0
 - Fix output generation when first_non_empty function doesn't generate output in https://github.com/openaddresses/batch-machine/pull/69

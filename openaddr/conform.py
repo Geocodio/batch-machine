@@ -46,10 +46,11 @@ gdal.PushErrorHandler(gdal_error_handler)
 # We add columns to the extracted CSV with our own data with these names.
 GEOM_FIELDNAME = 'oa:geom'
 
-ADDRESSES_SCHEMA = [ 'hash', 'number', 'street', 'unit', 'building_name', 'city', 'district', 'region', 'postcode', 'id' ]
-BUILDINGS_SCHEMA = [ 'hash']
+ADDRESSES_SCHEMA = [ 'hash', 'number', 'street', 'unit', 'building_name', 'city', 'district', 'region', 'postcode', 'id', 'accuracy' ]
+BUILDINGS_SCHEMA = [ 'hash', 'height', 'levels']
 PARCELS_SCHEMA = [ 'hash', 'pid' ]
-RESERVED_SCHEMA = ADDRESSES_SCHEMA + BUILDINGS_SCHEMA + PARCELS_SCHEMA + [
+CENTERLINES_SCHEMA = [ 'hash', 'id', 'name', 'oneway', 'speed', 'classification', 'surface', 'addr_from_left', 'addr_to_left', 'addr_from_right', 'addr_to_right', 'zip_left', 'zip_right' ]
+RESERVED_SCHEMA = ADDRESSES_SCHEMA + BUILDINGS_SCHEMA + PARCELS_SCHEMA + CENTERLINES_SCHEMA + [
     "lat",
     "lon"
 ]
@@ -183,7 +184,7 @@ class GuessDecompressTask(DecompressionTask):
             _L.info('Guessing gzip compression based on file names')
             return substitute_task.decompress(source_paths, workdir, filenames)
 
-        _L.warning('Could not guess a single compression from file names')
+        _L.info('Could not guess a single compression from file names')
         return source_paths
 
 def is_in(path, names):
@@ -209,14 +210,20 @@ class ZipDecompressTask(DecompressionTask):
 
         # Extract contents of zip file into expand_path directory.
         for source_path in source_paths:
-            with ZipFile(source_path, 'r') as z:
-                for name in z.namelist():
-                    if len(filenames) and not is_in(name, filenames):
-                        # Download only the named file, if any.
-                        _L.debug("Skipped file {}".format(name))
-                        continue
+            self._extract_zip(source_path, expand_path, filenames)
 
-                    z.extract(name, expand_path)
+        # Recursively extract nested zip files, but fail if more than one zip
+        # appears at the same directory level.
+        processed = set()
+        pending = list(self._find_single_zips(expand_path))
+
+        while pending:
+            zip_path = pending.pop()
+            if zip_path in processed:
+                continue
+            processed.add(zip_path)
+            self._extract_zip(zip_path, os.path.dirname(zip_path), filenames)
+            pending.extend(self._find_single_zips(os.path.dirname(zip_path)))
 
         # Collect names of directories and files in expand_path directory.
         for (dirpath, dirnames, filenames) in os.walk(expand_path):
@@ -229,6 +236,28 @@ class ZipDecompressTask(DecompressionTask):
                 _L.debug("Expanded file {}".format(output_files[-1]))
 
         return output_files
+
+    def _extract_zip(self, source_path, expand_path, filenames):
+        with ZipFile(source_path, 'r') as z:
+            for name in z.namelist():
+                if len(filenames) and not is_in(name, filenames):
+                    # Download only the named file, if any.
+                    _L.debug("Skipped file {}".format(name))
+                    continue
+
+                z.extract(name, expand_path)
+
+    def _find_single_zips(self, root_path):
+        zip_paths = []
+        for dirpath, _, file_names in os.walk(root_path):
+            zip_files = [name for name in file_names if name.lower().endswith('.zip')]
+            if len(zip_files) > 1:
+                raise DecompressionError(
+                    "Multiple nested zip files found in {}".format(dirpath)
+                )
+            for zip_name in zip_files:
+                zip_paths.append(os.path.join(dirpath, zip_name))
+        return zip_paths
 
 class GzipDecompressTask(DecompressionTask):
     def decompress(self, source_paths, workdir, filenames):
@@ -376,6 +405,28 @@ def find_source_path(data_source, source_paths):
                     return c
             _L.warning("Source names file %s but could not find it", source_file_name)
             return None
+    elif format_string == "gpkg":
+        candidates = []
+        for fn in source_paths:
+            basename, ext = os.path.splitext(fn)
+            if ext.lower() == ".gpkg":
+                candidates.append(fn)
+        if len(candidates) == 0:
+            _L.warning("No GPKG found in %s", source_paths)
+            return None
+        elif len(candidates) == 1:
+            _L.debug("Selected %s for source", candidates[0])
+            return candidates[0]
+        else:
+            if "file" not in conform:
+                _L.warning("Multiple GPKGs found, but source has no file attribute.")
+                return None
+            source_file_name = conform["file"]
+            for c in candidates:
+                if source_file_name == os.path.basename(c):
+                    return c
+            _L.warning("Source names file %s but could not find it", source_file_name)
+            return None
     elif format_string == "xml":
         # Return file if it's specified, else return the first .gml file we find
         if "file" in conform:
@@ -397,7 +448,7 @@ def find_source_path(data_source, source_paths):
         return None
 
 class ConvertToGeojsonTask(object):
-    known_types = ('.shp', '.json', '.csv', '.kml', '.gdb')
+    known_types = ('.shp', '.json', '.csv', '.kml', '.gdb', '.gpkg')
 
     def convert(self, source_config, source_paths, workdir):
         "Convert a list of source_paths and write results in workdir"
@@ -827,6 +878,10 @@ def row_function(sc, row, key, fxn):
         row = row_fxn_first_non_empty(sc, row, key, fxn)
     elif function == "constant":
         row = row_fxn_constant(sc, row, key, fxn)
+    elif function == "map":
+        row = row_fxn_map(sc, row, key, fxn)
+    elif function == "mph_to_kph":
+        row = row_fxn_mph_to_kph(sc, row, key, fxn)
 
     return row
 
@@ -846,7 +901,11 @@ def row_transform_and_convert(source_config, row):
             row = row_merge(source_config, row, k)
         if k in source_config.SCHEMA and isinstance(v, dict):
             "Dicts are custom processing functions"
-            row = row_function(source_config, row, k, v)
+            try:
+                row = row_function(source_config, row, k, v)
+            except Exception as e:
+                _L.error("Error processing function for key '%s' in row %s", k, row)
+                raise
 
     # Make up a random fingerprint if none exists
     cache_fingerprint = source_config.data_source.get('fingerprint', str(uuid4()))
@@ -865,8 +924,8 @@ def row_transform_and_convert(source_config, row):
 
 def row_merge(sc, row, key):
     "Merge multiple columns like 'Maple','St' to 'Maple St'"
-    merge_data = [row[field] for field in sc.data_source["conform"][key]]
-    row["oa:{}".format(key)] = ' '.join(merge_data)
+    merge_data = [(row.get(field, '') or '').strip() for field in sc.data_source["conform"][key]]
+    row["oa:{}".format(key)] = ' '.join([part for part in merge_data if part])
     return row
 
 def row_fxn_join(sc, row, key, fxn):
@@ -885,17 +944,17 @@ def row_fxn_regexp(sc, row, key, fxn):
     replace = fxn.get('replace', False)
     if replace:
         match = re.sub(pattern, convert_regexp_replace(replace), row[fxn["field"]])
-        row["oa:{}".format(key)] = match;
+        row["oa:{}".format(key)] = match
     else:
         match = pattern.search(row[fxn["field"]])
-        row["oa:{}".format(key)] = ''.join(match.groups()) if match else '';
+        row["oa:{}".format(key)] = ''.join(filter(None, match.groups())) if match else ''
     return row
 
 def row_fxn_prefixed_number(sc, row, key, fxn):
     "Extract '123' from '123 Maple St'"
 
     match = prefixed_number_pattern.search(row[fxn["field"]])
-    row["oa:{}".format(key)] = ''.join(match.groups()) if match else '';
+    row["oa:{}".format(key)] = ''.join(match.groups()) if match else ''
 
     return row
 
@@ -909,7 +968,7 @@ def row_fxn_postfixed_street(sc, row, key, fxn):
     else:
         match = postfixed_street_pattern.search(row[fxn["field"]])
 
-    row["oa:{}".format(key)] = ''.join(match.groups()) if match else '';
+    row["oa:{}".format(key)] = ''.join(match.groups()) if match else ''
 
     return row
 
@@ -917,7 +976,7 @@ def row_fxn_postfixed_unit(sc, row, key, fxn):
     "Extract 'Suite 300' from '123 Maple St Suite 300'"
 
     match = postfixed_unit_pattern.search(row[fxn["field"]])
-    row["oa:{}".format(key)] = ''.join(match.groups()) if match else '';
+    row["oa:{}".format(key)] = ''.join(match.groups()) if match else ''
 
     return row
 
@@ -1020,6 +1079,35 @@ def row_fxn_constant(sc, row, key, fxn):
 
     return row
 
+def row_fxn_mph_to_kph(sc, row, key, fxn):
+    "Convert a miles-per-hour value to kilometers-per-hour"
+    field = fxn.get('field', False)
+
+    if field and field in row:
+        try:
+            mph = float(row[field])
+            row['oa:{}'.format(key)] = str(round(mph * 1.60934))
+        except (ValueError, TypeError):
+            row['oa:{}'.format(key)] = ''
+
+    return row
+
+def row_fxn_map(sc, row, key, fxn):
+    "Map a value from a source column to a new value using a dictionary"
+    field = fxn.get('field', False)
+    mapping = fxn.get('mapping', {})
+
+    if field and field in row:
+        val = row[field]
+        if val in mapping:
+            row['oa:{}'.format(key)] = mapping[val]
+        elif 'else' in fxn:
+            row['oa:{}'.format(key)] = fxn['else']
+        else:
+            row['oa:{}'.format(key)] = ''
+
+    return row
+
 def row_canonicalize_unit_and_number(sc, row):
     "Canonicalize address unit and number"
     row["unit"] = (row.get("unit", '') or '').strip()
@@ -1102,7 +1190,7 @@ def extract_to_source_csv(source_config, source_path, extract_path):
     format_string = source_config.data_source["conform"]['format']
     protocol_string = source_config.data_source['protocol']
 
-    if format_string in ("shapefile", "xml", "gdb"):
+    if format_string in ("shapefile", "xml", "gdb", "gpkg"):
         ogr_source_path = normalize_ogr_filename_case(source_path)
         ogr_source_to_csv(source_config, ogr_source_path, extract_path)
     elif format_string == "csv":
@@ -1145,7 +1233,7 @@ def conform_cli(source_config, source_path, dest_path):
 
     format_string = source_config.data_source["conform"].get('format')
 
-    if not format_string in ["shapefile", "geojson", "csv", "xml", "gdb"]:
+    if not format_string in ["shapefile", "geojson", "csv", "xml", "gdb", "gpkg"]:
         _L.warning("Skipping file with unknown conform: %s", source_path)
         return 1
 

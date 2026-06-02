@@ -23,6 +23,7 @@ from .conform import (
     elaborate_filenames,
     ADDRESSES_SCHEMA,
     BUILDINGS_SCHEMA,
+    CENTERLINES_SCHEMA,
     PARCELS_SCHEMA,
 )
 
@@ -48,6 +49,8 @@ class SourceConfig:
             self.SCHEMA = BUILDINGS_SCHEMA
         elif self.layer == 'parcels':
             self.SCHEMA = PARCELS_SCHEMA
+        elif self.layer == 'centerlines':
+            self.SCHEMA = CENTERLINES_SCHEMA
 
 def cache(source_config, destdir, extras):
     ''' Python wrapper for openaddress-cache.
@@ -129,10 +132,15 @@ def conform(source_config, destdir, extras):
     downloaded_path = task1.download(source_urls, workdir, source_config)
     _L.info("Downloaded to %s", downloaded_path)
 
-    task2 = DecompressionTask.from_format_string(source_config.data_source.get('compression'))
-    names = elaborate_filenames(source_config.data_source.get('conform', {}).get('file', None))
-    decompressed_paths = task2.decompress(downloaded_path, workdir, names)
-    _L.info("Decompressed to %d files", len(decompressed_paths))
+    compression = source_config.data_source.get('compression')
+    if compression:
+        task2 = DecompressionTask.from_format_string(compression)
+        names = elaborate_filenames(source_config.data_source.get('conform', {}).get('file', None))
+        decompressed_paths = task2.decompress(downloaded_path, workdir, names)
+        _L.info("Decompressed to %d files", len(decompressed_paths))
+    else:
+        decompressed_paths = downloaded_path
+        _L.info("No decompression requested")
 
     task4 = ConvertToGeojsonTask()
     try:

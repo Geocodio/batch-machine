@@ -34,7 +34,7 @@ setup(
     },
     test_suite = 'openaddr.tests',
     install_requires = [
-        'gdal == 3.7.1',
+        'gdal == 3.11.0',
 
         'dateutils == 0.6.12', 'ijson == 2.4',
 
@@ -42,7 +42,7 @@ setup(
         'uritemplate == 4.1.1',
 
         # http://docs.python-requests.org/en/master/
-        'requests == 2.32.0',
+        'requests == 2.33.0',
 
         # https://github.com/patrys/httmock
         'httmock == 1.4.0',
@@ -51,11 +51,11 @@ setup(
         'esridump == 1.13.0',
 
         # Used in openaddr.parcels
-        'Shapely == 2.0.1',
+        'Shapely >= 2.0.1, < 3',
 
         # https://github.com/tilezen/mapbox-vector-tile
         'mapbox-vector-tile == 2.0.1',
         'future==0.18.3',
-        'protobuf==4.24',
+        'protobuf>=4.21, <5',
     ]
 )

@@ -153,7 +153,12 @@ def guess_url_file_extension(url):
     mimetypes.add_type('application/vnd.geo+json', '.json', False)
 
     _, likely_ext = os.path.splitext(path)
-    bad_extensions = '', '.cgi', '.php', '.aspx', '.asp', '.do'
+    if likely_ext == '.gz':
+        _, compressed_ext = os.path.splitext(path[:-3])
+        if compressed_ext:
+            likely_ext = compressed_ext + likely_ext
+
+    bad_extensions = "", ".cgi", ".php", ".aspx", ".asp", ".do"
 
     if not query and likely_ext not in bad_extensions:
         #
@@ -315,18 +320,25 @@ class EsriRestDownloadTask(DownloadTask):
     @classmethod
     def fields_from_conform_function(cls, v):
         fxn = v.get('function')
-        if fxn:
-            if fxn in ('join', 'format'):
-                return set(v['fields'])
-            elif fxn == 'chain':
-                fields = set()
-                user_vars = set([v['variable']])
-                for func in v['functions']:
-                    if isinstance(func, dict) and 'function' in func:
-                        fields |= cls.fields_from_conform_function(func) - user_vars
-                return fields
-            else:
-                return set([v.get('field')])
+        if not fxn:
+            return set()
+
+        if fxn in ('join', 'format'):
+            # Join and format functions are a list of fields
+            return set(v['fields'])
+        elif fxn == 'chain':
+            # Chain function is a list of functions that we should recurse into for field names
+            fields = set()
+            user_vars = set([v['variable']])
+            for func in v['functions']:
+                if isinstance(func, dict) and 'function' in func:
+                    fields |= cls.fields_from_conform_function(func) - user_vars
+            return fields
+        elif fxn == 'constant':
+            # Constant function doesn't use any fields
+            return set()
+        else:
+            return set([v.get('field')])
 
     @classmethod
     def field_names_to_request(cls, source_config):
@@ -348,11 +360,17 @@ class EsriRestDownloadTask(DownloadTask):
                 elif isinstance(v, list):
                     # It's a list of field names
                     fields |= set(v)
-                else:
+                elif isinstance(v, str):
+                    # It's a direct field name mapping
                     fields.add(v)
+                # Note: We intentionally skip non-string scalar values (e.g., integers) because
+                # Esri only supports string field names. Also, the 'accuracy' field can be
+                # set to an integer constant (like 1) to indicate a fixed accuracy level,
+                # rather than a field name to fetch from the source.
 
         if fields:
-            return list(filter(None, sorted(fields)))
+            # Remove any blank or None values
+            return list(sorted(filter(None, fields)))
         else:
             return None
 
