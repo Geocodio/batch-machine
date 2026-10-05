@@ -403,10 +403,12 @@ class EsriRestDownloadTask(DownloadTask):
 
             metadata = downloader.get_metadata()
 
-            if query_fields is None:
-                field_names = [f['name'] for f in metadata['fields']]
-            else:
-                field_names = query_fields[:]
+            field_names = [f['name'] for f in metadata['fields']]
+
+            missing_fields = [f for f in query_fields or [] if f not in field_names]
+            if missing_fields:
+                _L.warning("Conform fields missing from layer metadata: %s", missing_fields)
+                field_names += missing_fields
 
             if GEOM_FIELDNAME not in field_names:
                 field_names.append(GEOM_FIELDNAME)

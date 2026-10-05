@@ -528,7 +528,7 @@ class TestOA (unittest.TestCase):
             state = dict(zip(*json.load(file)))
 
         self.assertIsNotNone(state['cache'])
-        self.assertEqual(state['fingerprint'], '4a8047f90dbfe176c2a2b148837dae36')
+        self.assertEqual(state['fingerprint'], '4bc0e7aa15aed0d183d0485b964fdd4c')
         self.assertIsNotNone(state['processed'])
         self.assertIsNotNone(state['preview'])
         self.assertIsNotNone(state['pmtiles'])
@@ -557,7 +557,7 @@ class TestOA (unittest.TestCase):
             state = dict(zip(*json.load(file)))
 
         self.assertIsNotNone(state['cache'])
-        self.assertEqual(state['fingerprint'], '056bdaab3334e709bf29b0b2f1fcf8c4')
+        self.assertEqual(state['fingerprint'], '4bc0e7aa15aed0d183d0485b964fdd4c')
         self.assertIsNotNone(state['processed'])
         self.assertIsNone(state['preview'])
 
@@ -576,7 +576,7 @@ class TestOA (unittest.TestCase):
             state = dict(zip(*json.load(file)))
 
         self.assertIsNotNone(state['cache'])
-        self.assertEqual(state['fingerprint'], '056bdaab3334e709bf29b0b2f1fcf8c4')
+        self.assertEqual(state['fingerprint'], '4bc0e7aa15aed0d183d0485b964fdd4c')
         self.assertIsNotNone(state['processed'])
         self.assertIsNone(state['preview'])
 
@@ -1019,7 +1019,7 @@ class TestOA (unittest.TestCase):
             self.assertEqual(rows[0]['properties']['region'], u'TX')
             self.assertEqual(rows[0]['properties']['id'], u'')
             self.assertEqual(rows[0]['properties']['number'], u'308')
-            self.assertEqual(rows[0]['properties']['hash'], u'd9db73ddf7ed0e2b')
+            self.assertEqual(rows[0]['properties']['hash'], u'2f31420158da846f')
             self.assertEqual(rows[0]['properties']['city'], u'Mcgregor')
             self.assertEqual(rows[0]['geometry']['coordinates'], [-97.3961768, 31.4432706]),
             self.assertEqual(rows[0]['properties']['street'], u'PULLEN ST')
@@ -1081,7 +1081,7 @@ class TestOA (unittest.TestCase):
             self.assertEqual(len(rows), 8)
             self.assertEqual(rows[0]['properties']['id'], u'')
             self.assertEqual(rows[0]['properties']['number'], u'434')
-            self.assertEqual(rows[0]['properties']['hash'], u'a0127261b0619522')
+            self.assertEqual(rows[0]['properties']['hash'], u'41abd95de87dab64')
             self.assertEqual(rows[0]['properties']['city'], u'MONROE')
             self.assertEqual(rows[0]['geometry']['coordinates'], [-74.1926686, 41.3187728])
             self.assertEqual(rows[0]['properties']['street'], u'')

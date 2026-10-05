@@ -437,6 +437,30 @@ class TestConformTransforms (unittest.TestCase):
         d = row_fxn_regexp(c, d, "street", c.data_source["conform"]["street"])
         self.assertEqual(e, d)
 
+    def test_raw_properties(self):
+        d = SourceConfig(dict({
+            "schema": 2,
+            "layers": {
+                "addresses": [{
+                    "name": "default",
+                    "conform": {
+                        "street": ["s1", "s2"],
+                        "number": {"function": "regexp", "field": "full", "pattern": "^(\\d+)"},
+                        "id": "pid",
+                        "lon": "x",
+                        "lat": "y"
+                    },
+                    "fingerprint": "0000"
+                }]
+            }
+        }), "addresses", "default")
+
+        r = row_transform_and_convert(d, {
+            "s1": "MAPLE", "s2": "ST", "full": "123 MAPLE ST", "pid": "7", "x": "-119.2", "y": "39.3",
+            "UPRN": "34", "empty": "", "OA:extra": "skip", GEOM_FIELDNAME: "POINT (-119.2 39.3)"})
+        self.assertEqual("123", r['properties']['number'])
+        self.assertEqual({"full": "123 MAPLE ST", "UPRN": "34"}, r['properties']['raw'])
+
     def test_transform_and_convert(self):
         d = SourceConfig(dict({
             "schema": 2,
@@ -469,6 +493,7 @@ class TestConformTransforms (unittest.TestCase):
                 'hash': 'b3af08e447c7ed16',
                 "id": "",
                 "accuracy": "",
+                "raw": {},
             },
             'geometry': {
                 'coordinates': [-119.2, 39.3],
@@ -501,6 +526,7 @@ class TestConformTransforms (unittest.TestCase):
                 "id": "",
                 'hash': 'd4681f7e1d34e6ed',
                 "accuracy": "",
+                "raw": {},
             },
             'geometry': {
                 "type": "Point",
@@ -550,6 +576,7 @@ class TestConformTransforms (unittest.TestCase):
                 "building_name": "",
                 'hash': '591d7970b5753b0d',
                 "accuracy": "",
+                "raw": {"s": "123 MAPLE ST"},
             }
         }, r)
 
@@ -590,6 +617,7 @@ class TestConformTransforms (unittest.TestCase):
                 "building_name": "",
                 'hash': '7b1dc0b74cbc0162',
                 "accuracy": "",
+                "raw": {},
             }
         }, r)
 
