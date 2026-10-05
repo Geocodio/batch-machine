@@ -212,9 +212,9 @@ class ZipDecompressTask(DecompressionTask):
     # any per-entry file type filtering applies. Cap the declared
     # (uncompressed) size of any single entry and how many nested zips deep
     # we'll recurse, so worst case is bounded and the job fails loudly
-    # instead of exhausting disk. The per-entry cap defaults to 8GiB and can
+    # instead of exhausting disk. The per-entry cap defaults to 16GiB and can
     # be overridden with the BATCH_MACHINE_MAX_ZIP_ENTRY_BYTES env var.
-    MAX_ZIP_ENTRY_BYTES = 8 * 1024 ** 3  # 8GiB
+    MAX_ZIP_ENTRY_BYTES = 16 * 1024 ** 3  # 16GiB
     MAX_NESTED_ZIP_DEPTH = 10
 
     def _max_entry_bytes(self):
