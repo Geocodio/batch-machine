@@ -212,9 +212,16 @@ class ZipDecompressTask(DecompressionTask):
     # any per-entry file type filtering applies. Cap the declared
     # (uncompressed) size of any single entry and how many nested zips deep
     # we'll recurse, so worst case is bounded and the job fails loudly
-    # instead of exhausting disk.
-    MAX_ZIP_ENTRY_BYTES = 2 * 1024 ** 3  # 2GB
+    # instead of exhausting disk. The per-entry cap defaults to 8GiB and can
+    # be overridden with the BATCH_MACHINE_MAX_ZIP_ENTRY_BYTES env var.
+    MAX_ZIP_ENTRY_BYTES = 8 * 1024 ** 3  # 8GiB
     MAX_NESTED_ZIP_DEPTH = 10
+
+    def _max_entry_bytes(self):
+        override = os.environ.get('BATCH_MACHINE_MAX_ZIP_ENTRY_BYTES')
+        if override:
+            return int(override)
+        return self.MAX_ZIP_ENTRY_BYTES
 
     def decompress(self, source_paths, workdir, filenames):
         output_files = []
@@ -283,6 +290,7 @@ class ZipDecompressTask(DecompressionTask):
             further nested zips.
         '''
         found = set()
+        max_entry_bytes = self._max_entry_bytes()
         with ZipFile(source_path, 'r') as z:
             for zinfo in z.infolist():
                 name = zinfo.filename
@@ -290,10 +298,10 @@ class ZipDecompressTask(DecompressionTask):
                 # Check the declared (uncompressed) size from the zip's
                 # central directory before extracting anything - a bomb's
                 # compressed size can be tiny, but its declared size isn't.
-                if zinfo.file_size > self.MAX_ZIP_ENTRY_BYTES:
+                if zinfo.file_size > max_entry_bytes:
                     raise DecompressionError(
                         "Refusing to extract {} - declared size {} bytes exceeds {} byte limit, possible zip bomb"
-                        .format(name, zinfo.file_size, self.MAX_ZIP_ENTRY_BYTES)
+                        .format(name, zinfo.file_size, max_entry_bytes)
                     )
 
                 # Nested zip files are always extracted regardless of the
