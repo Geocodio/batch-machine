@@ -2928,6 +2928,37 @@ class TestZipDecompressTask(unittest.TestCase):
             with self.assertRaises(DecompressionError):
                 task.decompress([outer_zip_path], self.workdir, [])
 
+    def test_entry_under_limit_extracts(self):
+        outer_zip_path = self._make_outer_zip()
+
+        task = ZipDecompressTask()
+        with mock.patch.object(ZipDecompressTask, 'MAX_ZIP_ENTRY_BYTES', 10 * 1024 * 1024):
+            output_files = task.decompress([outer_zip_path], self.workdir, [])
+
+        self.assertIn('readme.txt', {os.path.basename(path) for path in output_files})
+
+    def test_default_entry_limit_admits_entries_over_two_gib(self):
+        self.assertEqual(ZipDecompressTask.MAX_ZIP_ENTRY_BYTES, 8 * 1024 ** 3)
+        self.assertGreater(ZipDecompressTask.MAX_ZIP_ENTRY_BYTES, 2540059567)
+
+    def test_entry_limit_env_override_refuses_oversized_entry(self):
+        outer_zip_path = self._make_outer_zip()
+
+        task = ZipDecompressTask()
+        with mock.patch.dict(os.environ, {'BATCH_MACHINE_MAX_ZIP_ENTRY_BYTES': '10'}):
+            with self.assertRaises(DecompressionError):
+                task.decompress([outer_zip_path], self.workdir, [])
+
+    def test_entry_limit_env_override_raises_cap(self):
+        outer_zip_path = self._make_outer_zip()
+
+        task = ZipDecompressTask()
+        with mock.patch.object(ZipDecompressTask, 'MAX_ZIP_ENTRY_BYTES', 10):
+            with mock.patch.dict(os.environ, {'BATCH_MACHINE_MAX_ZIP_ENTRY_BYTES': str(10 * 1024 * 1024)}):
+                output_files = task.decompress([outer_zip_path], self.workdir, [])
+
+        self.assertIn('readme.txt', {os.path.basename(path) for path in output_files})
+
     def test_deeply_nested_zips_raise_decompression_error(self):
         ''' A chain of nested zips deeper than the configured limit should
             be refused, as a zip bomb guard against chained amplification.
