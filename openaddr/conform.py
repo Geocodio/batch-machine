@@ -1012,6 +1012,8 @@ def row_transform_and_convert(source_config, row):
 
     c = source_config.data_source["conform"]
 
+    raw = row_raw_columns(source_config, row)
+
     "Attribute tags can utilize processing fxns"
     for k, v in c.items():
         if k in source_config.SCHEMA and isinstance(v, list):
@@ -1035,10 +1037,27 @@ def row_transform_and_convert(source_config, row):
     if source_config.layer == "addresses":
         feat['properties'] = row_canonicalize_unit_and_number(source_config.data_source, feat['properties'])
 
+    feat['properties']['raw'] = raw
+
     if feat['geometry'] and len(feat['geometry']['coordinates']) > 0:
         feat['geometry']['coordinates'] = set_precision(feat['geometry']['coordinates'], 7)
 
     return feat
+
+def row_raw_columns(sc, row):
+    """Copy the source columns that are not already in the output, before any conform function runs.
+    Columns mapped directly (a column name, or a list of column names) are excluded because their
+    values are output properties. Columns used only inside functions stay."""
+    c = sc.data_source["conform"]
+    mapped = set()
+    for key in list(sc.SCHEMA) + ['lat', 'lon']:
+        v = c.get(key)
+        if isinstance(v, str):
+            mapped.add(v)
+        elif isinstance(v, list):
+            mapped.update(f for f in v if isinstance(f, str))
+    return {k: v for k, v in row.items()
+            if k not in mapped and not k.lower().startswith('oa:') and v not in (None, '')}
 
 def row_merge(sc, row, key):
     "Merge multiple columns like 'Maple','St' to 'Maple St'"
