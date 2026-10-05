@@ -2937,9 +2937,10 @@ class TestZipDecompressTask(unittest.TestCase):
 
         self.assertIn('readme.txt', {os.path.basename(path) for path in output_files})
 
-    def test_default_entry_limit_admits_entries_over_two_gib(self):
-        self.assertEqual(ZipDecompressTask.MAX_ZIP_ENTRY_BYTES, 8 * 1024 ** 3)
+    def test_default_entry_limit_admits_large_known_entries(self):
+        self.assertEqual(ZipDecompressTask.MAX_ZIP_ENTRY_BYTES, 16 * 1024 ** 3)
         self.assertGreater(ZipDecompressTask.MAX_ZIP_ENTRY_BYTES, 2540059567)
+        self.assertGreater(ZipDecompressTask.MAX_ZIP_ENTRY_BYTES, 9043535569)
 
     def test_entry_limit_env_override_refuses_oversized_entry(self):
         outer_zip_path = self._make_outer_zip()
