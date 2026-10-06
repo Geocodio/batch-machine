@@ -55,6 +55,8 @@ setup(
 
         # https://github.com/tilezen/mapbox-vector-tile
         'mapbox-vector-tile == 2.0.1',
+        # H3 cell ids for progress reporting
+        'h3 >= 4, < 5',
         'future==0.18.3',
         'protobuf>=4.21, <5',
     ]

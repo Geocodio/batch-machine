@@ -74,6 +74,8 @@ def return_path_in_second_arg_dir(_, path, *args, **kwargs):
         file.write('yo')
     return os.path.join(path, "out.geojson")
 
+os.environ.setdefault('OPENADDR_PROGRESS_INTERVAL', '0')
+
 class TestOA (unittest.TestCase):
 
     def setUp(self):
