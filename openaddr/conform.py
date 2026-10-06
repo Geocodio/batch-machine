@@ -15,10 +15,11 @@ import re
 import osgeo
 import shutil
 
+from . import progress
 from .geojson import stream_geojson
 
 from shapely.wkt import loads as wkt_loads
-from shapely.geometry import mapping
+from shapely.geometry import mapping, shape
 
 from zipfile import ZipFile
 from locale import getpreferredencoding
@@ -230,6 +231,7 @@ class ZipDecompressTask(DecompressionTask):
 
         # Extract contents of zip file into expand_path directory.
         found = set()
+        progress.reporter.start_phase('Unzipping', total=self._extract_size(source_paths, filenames), unit='bytes')
         for source_path in source_paths:
             found |= self._extract_zip(source_path, expand_path, filenames)
 
@@ -261,6 +263,7 @@ class ZipDecompressTask(DecompressionTask):
             if zip_path in processed:
                 continue
             processed.add(zip_path)
+            progress.reporter.add_total(self._extract_size([zip_path], filenames))
             found |= self._extract_zip(zip_path, os.path.dirname(zip_path), filenames)
             if fully_satisfied():
                 break
@@ -281,7 +284,19 @@ class ZipDecompressTask(DecompressionTask):
                 output_files.append(os.path.join(dirpath, filename))
                 _L.debug("Expanded file {}".format(output_files[-1]))
 
+        progress.reporter.end_phase()
         return output_files
+
+    @staticmethod
+    def _is_extracted(name, filenames):
+        return name.lower().endswith('.zip') or not len(filenames) or is_in(name, filenames)
+
+    def _extract_size(self, zip_paths, filenames):
+        total = 0
+        for zip_path in zip_paths:
+            with ZipFile(zip_path, 'r') as z:
+                total += sum(i.file_size for i in z.infolist() if self._is_extracted(i.filename, filenames))
+        return total
 
     def _extract_zip(self, source_path, expand_path, filenames):
         ''' Extract matching entries, returning the subset of `filenames`
@@ -310,9 +325,10 @@ class ZipDecompressTask(DecompressionTask):
                 # zip is itself extracted.
                 if name.lower().endswith('.zip'):
                     z.extract(zinfo, expand_path)
+                    progress.reporter.advance(zinfo.file_size)
                     continue
 
-                if len(filenames) and not is_in(name, filenames):
+                if not self._is_extracted(name, filenames):
                     # Download only the named file, if any.
                     _L.debug("Skipped file {}".format(name))
                     continue
@@ -321,6 +337,7 @@ class ZipDecompressTask(DecompressionTask):
                     found.add(name.lower())
 
                 z.extract(name, expand_path)
+                progress.reporter.advance(zinfo.file_size)
         return found
 
     def _find_single_zips(self, root_path):
@@ -693,6 +710,10 @@ def ogr_source_to_csv(source_config, source_path, dest_path, disable_centroids=F
         writer = csv.DictWriter(f, fieldnames=out_fieldnames)
         writer.writeheader()
 
+        feature_count = in_layer.GetFeatureCount()
+        progress.reporter.start_phase('Reading source', total=feature_count if feature_count >= 0 else None)
+        row_count = 0
+
         in_feature = in_layer.GetNextFeature()
         while in_feature:
             row = dict()
@@ -734,11 +755,15 @@ def ogr_source_to_csv(source_config, source_path, dest_path, disable_centroids=F
                 row[GEOM_FIELDNAME] = None
 
             writer.writerow(row)
+            row_count += 1
+            progress.reporter.advance()
 
             in_feature.Destroy()
             in_feature = in_layer.GetNextFeature()
 
+    progress.reporter.end_phase()
     in_datasource.Destroy()
+    return row_count
 
 def csv_source_to_csv(source_config, source_path, dest_path, disable_centroids=False):
     "Convert a source CSV file to an intermediate form, coerced to UTF-8 and EPSG:4326"
@@ -808,6 +833,8 @@ def csv_source_to_csv(source_config, source_path, dest_path, disable_centroids=F
         with open(dest_path, 'w', encoding='utf-8') as dest_fp:
             writer = csv.DictWriter(dest_fp, out_fieldnames)
             writer.writeheader()
+            progress.reporter.start_phase('Reading source', unit='rows')
+            written = 0
             # For every row in the source CSV
             row_number = 0
             for source_row in reader:
@@ -822,6 +849,11 @@ def csv_source_to_csv(source_config, source_path, dest_path, disable_centroids=F
                     raise
                 else:
                     writer.writerow(out_row)
+                    written += 1
+                    progress.reporter.advance()
+
+            progress.reporter.end_phase()
+            return written
 
 def geojson_source_to_csv(source_config, source_path, dest_path, disable_centroids=False):
     '''
@@ -845,7 +877,10 @@ def geojson_source_to_csv(source_config, source_path, dest_path, disable_centroi
         with open(dest_path, 'w', encoding='utf-8') as dest_fp:
             writer = csv.DictWriter(dest_fp, out_fieldnames)
             writer.writeheader()
+            progress.reporter.start_phase('Reading source', total=os.path.getsize(source_path), unit='bytes')
+            written = 0
             for (row_number, feature) in enumerate(stream_geojson(file)):
+                progress.reporter.set_done(file.buffer.tell())
                 try:
                     row = feature['properties']
                     if feature['geometry'] is None:
@@ -864,6 +899,10 @@ def geojson_source_to_csv(source_config, source_path, dest_path, disable_centroi
                 else:
                     row.update({GEOM_FIELDNAME: geom.ExportToWkt()})
                     writer.writerow(row)
+                    written += 1
+
+            progress.reporter.end_phase()
+            return written
 
 _transform_cache = {}
 def _transform_to_4326(srs):
@@ -1322,44 +1361,67 @@ def extract_to_source_csv(source_config, source_path, extract_path, disable_cent
     extract_path: file to write the extracted CSV file
 
     The extracted file will be in UTF-8 and will have X and Y columns corresponding
-    to longitude and latitude in EPSG:4326.
+    to longitude and latitude in EPSG:4326. Returns the number of rows written.
     """
     format_string = source_config.data_source["conform"]['format']
     protocol_string = source_config.data_source['protocol']
 
     if format_string in ("shapefile", "xml", "gdb", "gpkg", "kml"):
         ogr_source_path = normalize_ogr_filename_case(source_path)
-        ogr_source_to_csv(source_config, ogr_source_path, extract_path, disable_centroids)
+        return ogr_source_to_csv(source_config, ogr_source_path, extract_path, disable_centroids)
     elif format_string == "csv":
-        csv_source_to_csv(source_config, source_path, extract_path, disable_centroids)
+        return csv_source_to_csv(source_config, source_path, extract_path, disable_centroids)
     elif format_string == "geojson":
         # GeoJSON sources have some awkward legacy with ESRI, see issue #34
         if protocol_string == "ESRI":
             _L.info("ESRI GeoJSON source found; treating it as CSV")
-            csv_source_to_csv(source_config, source_path, extract_path, disable_centroids)
+            return csv_source_to_csv(source_config, source_path, extract_path, disable_centroids)
         else:
             _L.info("Non-ESRI GeoJSON source found; converting as a stream.")
             geojson_source_path = normalize_ogr_filename_case(source_path)
-            geojson_source_to_csv(source_config, geojson_source_path, extract_path, disable_centroids)
+            return geojson_source_to_csv(source_config, geojson_source_path, extract_path, disable_centroids)
     else:
         raise Exception("Unsupported source format %s" % format_string)
 
-def transform_to_out_geojson(source_config, extract_path, dest_path):
+def _report_geometry_cell(geometry):
+    if geometry:
+        shp = shape(geometry)
+        if not shp.is_empty:
+            point = shp if shp.geom_type == 'Point' else shp.representative_point()
+            progress.reporter.cell(point.x, point.y, 'ok')
+
+def _report_row_cell(wkt, outcome):
+    try:
+        point = wkt_loads(wkt)
+        progress.reporter.cell(point.x, point.y, outcome)
+    except Exception:
+        pass
+
+def transform_to_out_geojson(source_config, extract_path, dest_path, row_count=None):
     ''' Transform an extracted source CSV to the OpenAddresses output GeoJSON by applying conform rules.
 
         source_config: description of the source, containing the conform object
         extract_path: extracted CSV file to process
         dest_path: path for output file in OpenAddress CSV
+        row_count: number of rows in the extract, if known, for progress reporting
     '''
     # Read through the extract CSV
     with open(extract_path, 'r', encoding='utf-8') as extract_fp:
         reader = csv.DictReader(extract_fp)
         # Write to the destination GeoJSON
         with open(dest_path, 'w', encoding='utf-8') as dest_fp:
+            progress.reporter.start_phase('Mapping columns', total=row_count, unit='rows')
             # For every row in the extract
             for extract_row in reader:
-                out_row = row_transform_and_convert(source_config, extract_row)
+                try:
+                    out_row = row_transform_and_convert(source_config, extract_row)
+                except Exception:
+                    _report_row_cell(extract_row.get(GEOM_FIELDNAME), 'error')
+                    raise
                 dest_fp.write(json.dumps(out_row, allow_nan=False) + '\n')
+                progress.reporter.advance()
+                _report_geometry_cell(out_row['geometry'])
+            progress.reporter.end_phase()
 
 def conform_cli(source_config, source_path, dest_path, disable_centroids=False):
     "Command line entry point for conforming a downloaded source to an output CSV."
@@ -1380,8 +1442,8 @@ def conform_cli(source_config, source_path, dest_path, disable_centroids=False):
     _L.debug('extract temp file %s', extract_path)
 
     try:
-        extract_to_source_csv(source_config, source_path, extract_path, disable_centroids)
-        transform_to_out_geojson(source_config, extract_path, dest_path)
+        row_count = extract_to_source_csv(source_config, source_path, extract_path, disable_centroids)
+        transform_to_out_geojson(source_config, extract_path, dest_path, row_count)
     finally:
         os.remove(extract_path)
 

@@ -28,6 +28,7 @@ _http_timeout = 180
 
 from .conform import GEOM_FIELDNAME
 from . import util
+from . import progress
 
 def mkdirsp(path):
     try:
@@ -298,10 +299,16 @@ class URLDownloadTask(DownloadTask):
                 raise DownloadError('{} response from {}'.format(resp.status_code, source_url))
 
             size = 0
+            content_length = resp.headers.get('Content-Length')
+            progress.reporter.start_phase(
+                'Downloading', total=int(content_length) if content_length and content_length.isdigit() else None,
+                unit='bytes')
             with open(file_path, 'wb') as fp:
                 for chunk in resp.iter_content(self.CHUNK):
                     size += len(chunk)
                     fp.write(chunk)
+                    progress.reporter.advance(len(chunk))
+            progress.reporter.end_phase()
 
             output_files.append(file_path)
 
@@ -414,17 +421,21 @@ class EsriRestDownloadTask(DownloadTask):
                 field_names.append(GEOM_FIELDNAME)
 
             # Get the count of rows in the layer
+            row_count = None
             try:
                 row_count = downloader.get_feature_count()
                 _L.info("Source has {} rows".format(row_count))
             except EsriDownloadError:
                 _L.info("Source doesn't support count")
 
+            progress.reporter.start_phase('Downloading from ArcGIS', total=row_count)
+
             with open(file_path, 'w', encoding='utf-8') as f:
                 writer = csv.DictWriter(f, fieldnames=field_names)
                 writer.writeheader()
 
                 for feature in downloader:
+                    point = None
                     try:
                         geom = feature.get('geometry') or {}
                         row = feature.get('properties') or {}
@@ -453,12 +464,21 @@ class EsriRestDownloadTask(DownloadTask):
                             raise TypeError("Geometry has non-finite coordinates")
 
                         shp = shape(geom)
+                        point = None if shp.is_empty else (shp if shp.geom_type == 'Point' else shp.representative_point())
                         row[GEOM_FIELDNAME] = shp.wkt
 
                         writer.writerow({fn: row.get(fn) for fn in field_names})
                         size += 1
+                        progress.reporter.advance()
+                        if point is not None:
+                            progress.reporter.cell(point.x, point.y, 'ok')
                     except TypeError:
                         _L.debug("Skipping a geometry", exc_info=True)
+                        progress.reporter.count('skipped')
+                        if point is not None:
+                            progress.reporter.cell(point.x, point.y, 'error')
+
+            progress.reporter.end_phase()
 
             _L.info("Downloaded %s ESRI features for file %s", size, file_path)
             output_files.append(file_path)

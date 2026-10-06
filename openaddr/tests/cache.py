@@ -415,6 +415,28 @@ class TestCacheEsriDownload (unittest.TestCase):
                 self.assertTrue('oa:geom' in all_data[0])
                 self.assertEqual(all_data[0]['oa:geom'], 'POINT (-86.82960553 34.18671398)')
 
+    def test_esri_download_reports_progress(self):
+        """ ESRI Caching Emits Progress Lines With The Layer Feature Count As Total """
+        import io
+        from contextlib import redirect_stdout
+        from .. import progress
+
+        task = EsriRestDownloadTask('us-al-cullman')
+        c = SourceConfig(dict({
+            "schema": 2,
+            "layers": {"addresses": [{"name": "default", "conform": {"lat": "LAT", "lon": "LON"}}]}
+        }), "addresses", "default")
+        out = io.StringIO()
+        with patch.object(progress, 'reporter', progress.Reporter(interval=15)), redirect_stdout(out):
+            with httmock.HTTMock(self.response_content):
+                task.download(["https://web2.kcsgis.com/kcsgis/rest/services/Cullman/VAM_Cullman_FS/FeatureServer/4"], self.workdir, c)
+
+        lines = [json.loads(line)['progress'] for line in out.getvalue().splitlines()]
+        self.assertEqual(len(lines), 2)
+        self.assertEqual((lines[0]['phase'], lines[0]['done'], lines[0]['total']), ('Downloading from ArcGIS', 0, 5))
+        self.assertEqual((lines[1]['done'], lines[1]['total']), (5, 5))
+        self.assertEqual(sum(counts[0] for counts in lines[1]['cells'].values()), 5)
+
     def test_skip_esri_features_with_nan_geometry(self):
         """ ESRI Caching Will Skip Features Whose Geometry Is The String "NaN" """
         task = EsriRestDownloadTask('us-pa-bradford')
