@@ -435,7 +435,7 @@ class TestCacheEsriDownload (unittest.TestCase):
         self.assertEqual(len(lines), 2)
         self.assertEqual((lines[0]['phase'], lines[0]['done'], lines[0]['total']), ('Downloading from ArcGIS', 0, 5))
         self.assertEqual((lines[1]['done'], lines[1]['total']), (5, 5))
-        self.assertEqual(sum(counts[0] for counts in lines[1]['cells'].values()), 5)
+        self.assertNotIn('cells', lines[1])
 
     def test_skip_esri_features_with_nan_geometry(self):
         """ ESRI Caching Will Skip Features Whose Geometry Is The String "NaN" """

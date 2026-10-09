@@ -470,8 +470,6 @@ class EsriRestDownloadTask(DownloadTask):
                         writer.writerow({fn: row.get(fn) for fn in field_names})
                         size += 1
                         progress.reporter.advance()
-                        if point is not None:
-                            progress.reporter.cell(point.x, point.y, 'ok')
                     except TypeError:
                         _L.debug("Skipping a geometry", exc_info=True)
                         progress.reporter.count('skipped')
