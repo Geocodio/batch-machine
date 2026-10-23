@@ -508,6 +508,38 @@ class TestFromProtocolStringHeaders (unittest.TestCase):
         finally:
             shutil.rmtree(workdir)
 
+    def _dumper_kwargs_for_request_settings(self, request_settings):
+        workdir = tempfile.mkdtemp(prefix='testCachePaginate-')
+        try:
+            task = EsriRestDownloadTask('us-oh-statewide')
+            layer = {"name": "default", "conform": None}
+            if request_settings is not None:
+                layer["request"] = request_settings
+            c = SourceConfig(dict({
+                "schema": 2,
+                "layers": {"parcels": [layer]}
+            }), "parcels", "default")
+
+            with patch.object(cache_module, 'EsriDumper') as dumper_patch:
+                dumper_patch.return_value.get_metadata.return_value = {'fields': []}
+                dumper_patch.return_value.get_feature_count.return_value = 0
+                dumper_patch.return_value.__iter__.return_value = iter([])
+
+                task.download(['http://example.com/'], workdir, c)
+
+                _, kwargs = dumper_patch.call_args
+                return kwargs
+        finally:
+            shutil.rmtree(workdir)
+
+    def test_request_paginate_oid_reaches_esri_dumper(self):
+        kwargs = self._dumper_kwargs_for_request_settings({"paginate": "oid"})
+        self.assertIs(kwargs.get('paginate_oid'), True)
+
+    def test_esri_dumper_pages_by_offset_by_default(self):
+        self.assertIs(self._dumper_kwargs_for_request_settings(None).get('paginate_oid'), False)
+        self.assertIs(self._dumper_kwargs_for_request_settings({"headers": {}}).get('paginate_oid'), False)
+
     def test_no_headers_still_gets_default_user_agent(self):
         task = DownloadTask.from_protocol_string('http', 'us-il-champaign')
         self.assertEqual(list(task.headers.keys()), ['User-Agent'])

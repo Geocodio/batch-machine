@@ -396,6 +396,8 @@ class EsriRestDownloadTask(DownloadTask):
 
         query_fields = EsriRestDownloadTask.field_names_to_request(source_config)
         conform = source_config.data_source.get('conform') or {}
+        request_settings = source_config.data_source.get('request') or {}
+        paginate_oid = request_settings.get('paginate') == 'oid'
 
         for source_url in source_urls:
             size = 0
@@ -406,7 +408,7 @@ class EsriRestDownloadTask(DownloadTask):
                 _L.debug("File exists %s", file_path)
                 continue
 
-            downloader = EsriDumper(source_url, parent_logger=_L, timeout=300, extra_headers=self.headers)
+            downloader = EsriDumper(source_url, parent_logger=_L, timeout=300, extra_headers=self.headers, paginate_oid=paginate_oid)
 
             metadata = downloader.get_metadata()
 
